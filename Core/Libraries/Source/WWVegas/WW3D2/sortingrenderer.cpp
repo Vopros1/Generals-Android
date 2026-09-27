@@ -337,6 +337,15 @@ static SortingNodeStruct* overlapping_nodes[MAX_OVERLAPPING_NODES];
 
 void SortingRendererClass::Insert_To_Sorting_Pool(SortingNodeStruct* state)
 {
+	// Android/DXVK: the dynamic vertex and index buffers use 16-bit counts.
+	// Flush before a batch exceeds their limits, otherwise vertex allocation can
+	// truncate while the fill loop still writes the full count and corrupts memory.
+	if (overlapping_node_count > 0 &&
+		(overlapping_vertex_count + state->vertex_count > 65535u ||
+		 (overlapping_polygon_count + state->polygon_count) * 3u > 65535u)) {
+		Flush_Sorting_Pool();
+	}
+
 	if (overlapping_node_count>=MAX_OVERLAPPING_NODES) {
 		Release_Refs(state);
 		delete state;
