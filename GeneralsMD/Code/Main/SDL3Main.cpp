@@ -750,6 +750,10 @@ int main(int argc, char* argv[])
 		// GeneralsX @android FadiLabib 07/07/2026 - Android uses the same translator.
 		SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
 #endif
+#if defined(__ANDROID__)
+		// GeneralsX @bugfix Codex 27/09/2026 Keep SDL in landscape before video init.
+		SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+#endif
 		if (!SDL_InitSubSystem(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
 			fprintf(stderr, "FATAL: Failed to initialize SDL3: %s\n", SDL_GetError());
 			return 1;
@@ -815,9 +819,8 @@ int main(int argc, char* argv[])
 #if (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE) || defined(__ANDROID__)
 		// Match the game's internal resolution to the phone screen's aspect ratio.
 		// Without this the engine runs its 4:3 default inside the 19.5:9 display:
-		// pillarboxed picture and a skewed window->game coordinate mapping. Height
-		// stays at the engine's 600px design baseline (UI layouts assume >= 600);
-		// width follows the real aspect. Injected as -xres/-yres argv entries so
+		// pillarboxed picture and a skewed window->game coordinate mapping.
+		// Use the native display dimensions as -xres/-yres argv entries so
 		// the normal command-line path applies them (user-passed flags still win
 		// because the parser lets later arguments override earlier ones... ours go
 		// last, so only add them if the user didn't pass explicit -xres/-yres).
@@ -834,15 +837,26 @@ int main(int argc, char* argv[])
 			// the engine's resolution-aware font scaling (GlobalLanguage).
 			int winW = 0, winH = 0;
 #if defined(__ANDROID__)
-			// GeneralsX @android FadiLabib 07/07/2026 - The fullscreen window's size
-			// isn't laid out yet at this point on Android (surface creation is
-			// deferred), so query the panel's native mode directly — always valid.
-			// Force landscape dims (the app is orientation-locked) so a portrait-
-			// reported mode still yields xres>yres. Measured 8.3% black pillarbox
-			// bars each side without this (4:3 default in a 16:10 panel).
-			if (const SDL_DisplayMode *dm = SDL_GetCurrentDisplayMode(SDL_GetPrimaryDisplay())) {
-				winW = dm->w > dm->h ? dm->w : dm->h;
-				winH = dm->w > dm->h ? dm->h : dm->w;
+			// GeneralsX @bugfix Codex 27/09/2026 Use the Android display's
+			// native size even when SDL has not laid out its window yet. Some
+			// devices report the mode in portrait or cannot return a current mode.
+			// Fall back to display bounds and normalize both to landscape.
+			const SDL_DisplayID display = SDL_GetPrimaryDisplay();
+			if (const SDL_DisplayMode *dm = SDL_GetCurrentDisplayMode(display)) {
+				winW = dm->w;
+				winH = dm->h;
+			}
+			if (winW <= 0 || winH <= 0) {
+				SDL_Rect bounds{};
+				if (SDL_GetDisplayBounds(display, &bounds)) {
+					winW = bounds.w;
+					winH = bounds.h;
+				}
+			}
+			if (winW < winH) {
+				const int portraitW = winW;
+				winW = winH;
+				winH = portraitW;
 			}
 #else
 			SDL_GetWindowSizeInPixels(TheSDL3Window, &winW, &winH);
@@ -872,6 +886,11 @@ int main(int argc, char* argv[])
 				fprintf(stderr, "INFO: internal resolution set to %sx%s (screen %dx%d)\n",
 				        xresVal, yresVal, winW, winH);
 			}
+#if defined(__ANDROID__)
+			else if (!userSetRes) {
+				fprintf(stderr, "WARNING: Android display size unavailable; keeping default internal resolution\n");
+			}
+#endif
 		}
 #endif
 		}
