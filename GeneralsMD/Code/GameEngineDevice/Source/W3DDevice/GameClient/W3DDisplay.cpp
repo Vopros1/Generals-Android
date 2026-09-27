@@ -603,6 +603,18 @@ static void buildFilteredResolutions()
 	float density = 1.0f;
 	DX8Wrapper::GetNativeDisplaySize(nativeW, nativeH, density);
 
+#if defined(__ANDROID__)
+	// Android presents through one fixed-size surface. DXVK may enumerate no
+	// desktop display modes, so offer that surface size to the Options menu.
+	if (nativeW <= 0 || nativeH <= 0) {
+		nativeW = TheGlobalData->m_xResolution;
+		nativeH = TheGlobalData->m_yResolution;
+	}
+	s_filteredResolutions.push_back({nativeW, nativeH, DEFAULT_DISPLAY_BIT_DEPTH});
+	s_filteredDirty = false;
+	return;
+#endif
+
 	// GeneralsX @android - Some mobile drivers (e.g. Samsung Xclipse via DXVK)
 	// enumerate zero acceptable display modes, so Enumerate_Devices() adds no
 	// entry to the render-device table. Get_Render_Device_Desc(0) would then
