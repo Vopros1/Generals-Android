@@ -313,23 +313,49 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Android" OR ANDROID)
     message(WARNING "DXVK Android: 'git submodule update --init --recursive' on the fork returned ${DXVK_ANDROID_SUBMOD_RESULT}; nested submodules may be missing")
   endif()
 
-  # Apply Patches/dxvk-android.patch idempotently: skip when the working tree
-  # already carries it (reverse-check passes), fail the configure otherwise so an
-  # unpatched DXVK (portability-subset use sites unguarded) can never build silently.
-  execute_process(
-    COMMAND git -C "${DXVK_LOCAL_FORK_DIR}" apply --reverse --check "${CMAKE_SOURCE_DIR}/Patches/dxvk-android.patch"
-    RESULT_VARIABLE DXVK_ANDROID_PATCH_ALREADY_APPLIED
-    ERROR_QUIET)
-  if(NOT DXVK_ANDROID_PATCH_ALREADY_APPLIED EQUAL 0)
-    execute_process(
-      COMMAND git -C "${DXVK_LOCAL_FORK_DIR}" apply "${CMAKE_SOURCE_DIR}/Patches/dxvk-android.patch"
-      RESULT_VARIABLE DXVK_ANDROID_PATCH_RESULT)
-    if(NOT DXVK_ANDROID_PATCH_RESULT EQUAL 0)
-      message(FATAL_ERROR "Failed to apply Patches/dxvk-android.patch to references/fadi-labib-dxvk — the Android DXVK build requires it.")
+  # GeneralsX @bugfix Codex 27/09/2026 - The pinned DXVK fork already
+  # includes these Android changes, plus later edits. A reverse patch check
+  # rejects that valid state, so verify the required features in each file.
+  set(DXVK_ANDROID_FEATURE_MARKERS
+    "meson.build|Android: do NOT statically link"
+    "src/dxvk/dxvk_adapter.cpp|Portability subset is a MoltenVK-only concept"
+    "src/vulkan/vulkan_loader.cpp|dxvkAndroidOpenTurnip"
+    "src/wsi/sdl3/wsi_platform_sdl3.cpp|libSDL3.so"
+    "src/wsi/sdl3/wsi_platform_sdl3_funcs.h|SDL_GetWindowProperties"
+    "src/wsi/sdl3/wsi_window_sdl3.cpp|vkCreateAndroidSurfaceKHR")
+  set(DXVK_ANDROID_FEATURES_PRESENT TRUE)
+  foreach(DXVK_ANDROID_FEATURE IN LISTS DXVK_ANDROID_FEATURE_MARKERS)
+    string(REPLACE "|" ";" DXVK_ANDROID_FEATURE_PARTS "${DXVK_ANDROID_FEATURE}")
+    list(GET DXVK_ANDROID_FEATURE_PARTS 0 DXVK_ANDROID_FEATURE_FILE)
+    list(GET DXVK_ANDROID_FEATURE_PARTS 1 DXVK_ANDROID_FEATURE_MARKER)
+    file(READ "${DXVK_LOCAL_FORK_DIR}/${DXVK_ANDROID_FEATURE_FILE}" DXVK_ANDROID_FEATURE_SOURCE)
+    string(FIND "${DXVK_ANDROID_FEATURE_SOURCE}" "${DXVK_ANDROID_FEATURE_MARKER}" DXVK_ANDROID_FEATURE_POSITION)
+    if(DXVK_ANDROID_FEATURE_POSITION EQUAL -1)
+      set(DXVK_ANDROID_FEATURES_PRESENT FALSE)
+      break()
     endif()
-    message(STATUS "DXVK Android: applied Patches/dxvk-android.patch")
+  endforeach()
+
+  if(DXVK_ANDROID_FEATURES_PRESENT)
+    message(STATUS "DXVK Android: required patch features already present in fork")
   else()
-    message(STATUS "DXVK Android: Patches/dxvk-android.patch already applied")
+    # Older fork revisions still need the patch. Fail if neither its reverse
+    # nor forward check succeeds; never build DXVK without these features.
+    execute_process(
+      COMMAND git -C "${DXVK_LOCAL_FORK_DIR}" apply --reverse --check "${CMAKE_SOURCE_DIR}/Patches/dxvk-android.patch"
+      RESULT_VARIABLE DXVK_ANDROID_PATCH_ALREADY_APPLIED
+      ERROR_QUIET)
+    if(NOT DXVK_ANDROID_PATCH_ALREADY_APPLIED EQUAL 0)
+      execute_process(
+        COMMAND git -C "${DXVK_LOCAL_FORK_DIR}" apply "${CMAKE_SOURCE_DIR}/Patches/dxvk-android.patch"
+        RESULT_VARIABLE DXVK_ANDROID_PATCH_RESULT)
+      if(NOT DXVK_ANDROID_PATCH_RESULT EQUAL 0)
+        message(FATAL_ERROR "Failed to apply Patches/dxvk-android.patch to references/fadi-labib-dxvk — the Android DXVK build requires it.")
+      endif()
+      message(STATUS "DXVK Android: applied Patches/dxvk-android.patch")
+    else()
+      message(STATUS "DXVK Android: Patches/dxvk-android.patch already applied")
+    endif()
   endif()
 
   # Generate the meson cross file from the template, filling in the NDK bin dir
