@@ -358,6 +358,23 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Android" OR ANDROID)
     endif()
   endif()
 
+  # A fixed Android surface may keep returning VK_SUBOPTIMAL_KHR even when
+  # presentation succeeds. Avoid rebuilding the swapchain on every frame.
+  set(DXVK_ANDROID_SUBOPTIMAL_PATCH "${CMAKE_SOURCE_DIR}/Patches/dxvk-android-suboptimal.patch")
+  execute_process(
+    COMMAND git -C "${DXVK_LOCAL_FORK_DIR}" apply --reverse --check "${DXVK_ANDROID_SUBOPTIMAL_PATCH}"
+    RESULT_VARIABLE DXVK_ANDROID_SUBOPTIMAL_ALREADY_APPLIED
+    ERROR_QUIET)
+  if(NOT DXVK_ANDROID_SUBOPTIMAL_ALREADY_APPLIED EQUAL 0)
+    execute_process(
+      COMMAND git -C "${DXVK_LOCAL_FORK_DIR}" apply "${DXVK_ANDROID_SUBOPTIMAL_PATCH}"
+      RESULT_VARIABLE DXVK_ANDROID_SUBOPTIMAL_PATCH_RESULT)
+    if(NOT DXVK_ANDROID_SUBOPTIMAL_PATCH_RESULT EQUAL 0)
+      message(FATAL_ERROR "Failed to apply Patches/dxvk-android-suboptimal.patch to references/fadi-labib-dxvk")
+    endif()
+    message(STATUS "DXVK Android: applied persistent-suboptimal swapchain fix")
+  endif()
+
   # Generate the meson cross file from the template, filling in the NDK bin dir
   # and the host glslang. The wrappers embed -target/--sysroot, so no arch/sysroot
   # flags are needed in [built-in options] (unlike the iOS file).
