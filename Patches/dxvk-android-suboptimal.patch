@@ -1,0 +1,54 @@
+diff --git a/src/dxvk/dxvk_presenter.cpp b/src/dxvk/dxvk_presenter.cpp
+--- a/src/dxvk/dxvk_presenter.cpp
++++ b/src/dxvk/dxvk_presenter.cpp
+@@ -101,7 +101,12 @@
+ 
+       m_acquireStatus = m_vkd->vkAcquireNextImageKHR(m_vkd->device(),
+         m_swapchain, std::numeric_limits<uint64_t>::max(),
+         sync.acquire, VK_NULL_HANDLE, &m_imageIndex);
++#if defined(__ANDROID__)
++      // The fixed Android surface may report suboptimal while presenting correctly.
++      if (m_acquireStatus == VK_SUBOPTIMAL_KHR)
++        m_acquireStatus = VK_SUCCESS;
++#endif
+     }
+ 
+     // This is a normal occurence, but may be useful for
+@@ -125,7 +130,12 @@
+ 
+       m_acquireStatus = m_vkd->vkAcquireNextImageKHR(m_vkd->device(),
+         m_swapchain, std::numeric_limits<uint64_t>::max(),
+         sync.acquire, VK_NULL_HANDLE, &m_imageIndex);
++#if defined(__ANDROID__)
++      // The fixed Android surface may report suboptimal while presenting correctly.
++      if (m_acquireStatus == VK_SUBOPTIMAL_KHR)
++        m_acquireStatus = VK_SUCCESS;
++#endif
+ 
+       if (m_acquireStatus < 0) {
+         Logger::info(str::format("Presenter: Got ", m_acquireStatus, " from fresh swapchain"));
+@@ -198,7 +208,11 @@
+     }
+ 
+     VkResult status = m_vkd->vkQueuePresentKHR(
+       m_device->queues().graphics.queueHandle, &info);
++#if defined(__ANDROID__)
++    if (status == VK_SUBOPTIMAL_KHR)
++      status = VK_SUCCESS;
++#endif
+ 
+     // Maintain valid state if presentation succeeded, even if we want to
+     // recreate the swapchain. Spec says that 'queue' operations, i.e. the
+@@ -238,7 +252,12 @@
+ 
+       m_acquireStatus = m_vkd->vkAcquireNextImageKHR(m_vkd->device(),
+         m_swapchain, std::numeric_limits<uint64_t>::max(),
+         nextSync.acquire, VK_NULL_HANDLE, &m_imageIndex);
++#if defined(__ANDROID__)
++      // The fixed Android surface may report suboptimal while presenting correctly.
++      if (m_acquireStatus == VK_SUBOPTIMAL_KHR)
++        m_acquireStatus = VK_SUCCESS;
++#endif
+     }
+ 
+     // Recreate the swapchain on the next acquire, even if we get suboptimal.
